@@ -11,6 +11,7 @@ screw*
 # YOLO training runs & output weights
 runs/
 *.pt
+!code/V3/best.pt
 
 # Sensitive documents / tokens
 github&PATToken.docx

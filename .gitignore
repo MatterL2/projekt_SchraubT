@@ -1,1 +1,17 @@
 github&PATToken.docx
+
+# Roboflow downloaded datasets
+screw_V2*
+screw_v2*
+
+# YOLO training runs & output weights
+runs/
+*.pt
+
+# Sensitive documents / tokens
+github&PATToken.docx
+
+# Python cache & environment
+__pycache__/
+*.pyc
+.env

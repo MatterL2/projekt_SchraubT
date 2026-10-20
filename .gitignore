@@ -3,6 +3,7 @@ github&PATToken.docx
 # Roboflow downloaded datasets
 screw_V2*
 screw_v2*
+screw*
 
 # YOLO training runs & output weights
 runs/

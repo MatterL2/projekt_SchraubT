@@ -34,17 +34,19 @@ while cap.isOpened():
   gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
   gray_blur = cv2.GaussianBlur(gray, (9, 9), 2)
 
-  results = model(frame, stream=True, verbose=False)
+  results = model(frame, stream=True, verbose=False) # se contente d'exécuter l'IA (best.pt) sur ton image pour faire la prédiction (détection et segmentation). Elle analyse l'image et stocke les résultats bruts mathématiques
+
+
 
   for result in results:
-    if result.masks is not None:
-      for mask in result.masks.xy:
+    if result.masks is not None:                    #Il vérifie si l'IA a trouvé des objets segmentés dans la frame (si le modèle renvoie des masques et qu'ils ne sont pas vides).
+      for mask in result.masks.xy:                  # contient la liste de tous les objets segmentés. Chaque mask représente les coordonnées $(x, y)$ du contour de l'objet détecté.
         points = np.array(mask, dtype=np.float32)
         rect = cv2.minAreaRect(points)
         (center_x, center_y), (dim1, dim2), angle = rect
         longeur_pixel = max(dim1, dim2)
 
-        # ON ENLÈVE LE FILTRE : On prend directement chaque longueur détectée
+        
         # et on l'ajoute à notre historique brut
         liste_mesures_vis.append(longeur_pixel)
         if len(liste_mesures_vis) > MAX_HISTORIQUE:
@@ -62,6 +64,16 @@ while cap.isOpened():
             (0, 0, 0),
             2,
         )
+    if result.boxes is not None:
+        for box in result.boxes:
+            # 1. Récupérer l'indice de la classe (ex: 0, 1...)
+            cls_id = int(box.cls[0])
+            
+            # 2. Retrouver le nom textuel correspondant dans le dictionnaire du modèle
+            class_name = result.names[cls_id]
+            
+            
+    
 
   # Calibrage de la pièce
   cercles = cv2.HoughCircles(
@@ -75,7 +87,7 @@ while cap.isOpened():
   )
   if cercles is not None:
     cercles = np.uint16(np.around(cercles))
-    i = cercles[0, 0]
+    i = cercles[0, 0]     #Extrait le premier cercle de cette liste. pour qu on ai plus qu une liste avec [x,y,r]
     if calibration is None:
       diametre_piece_mes.append(i[2] * 2)
       if len(diametre_piece_mes) >= 30:
@@ -111,6 +123,8 @@ while cap.isOpened():
       dernier_affichage = temps_actuel
       print(f"Taille vis validée & max (px): {longeur_vis_validee:.1f}")
       print(f"Longueur vis (mm): {vis_mm:.2f} mm")
+      # 3. Afficher le type de vis dans le terminal
+      print(f"Type détectée : {class_name}")
 
   cv2.imshow("Detection de vis en direct - YOLOv8", annotated_frame)
   if cv2.waitKey(1) & 0xFF == ord("q"):

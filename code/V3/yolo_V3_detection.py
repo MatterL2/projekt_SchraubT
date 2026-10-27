@@ -73,7 +73,6 @@ while cap.isOpened():
             class_name = result.names[cls_id]
             
             
-    
 
   # Calibrage de la pièce
   cercles = cv2.HoughCircles(

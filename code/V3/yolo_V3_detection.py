@@ -129,6 +129,6 @@ while cap.isOpened():
   cv2.imshow("Detection de vis en direct - YOLOv8", annotated_frame)
   if cv2.waitKey(1) & 0xFF == ord("q"):
     break
-
+#
 cap.release()
 cv2.destroyAllWindows()

@@ -9,10 +9,6 @@ piece_diametre = 25.75
 calibration = None
 diametre_piece_mes = []
 
-# Liste simple pour stocker toutes les mesures brutes
-liste_mesures_vis = []
-MAX_HISTORIQUE = 30  # Taille de la fenêtre d'analyse
-
 model = YOLO("runs/segment/train/weights/best.pt")
 cap = cv2.VideoCapture(1)
 
@@ -34,47 +30,115 @@ while cap.isOpened():
   gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
   gray_blur = cv2.GaussianBlur(gray, (9, 9), 2)
 
-  results = model(frame, stream=True, verbose=False) # se contente d'exécuter l'IA (best.pt) sur ton image pour faire la prédiction (détection et segmentation). Elle analyse l'image et stocke les résultats bruts mathématiques
-
-
+  results = model(
+      frame, stream=True, verbose=False
+  )  # Prédiction YOLO (détection et segmentation)
 
   for result in results:
-    if result.masks is not None:                    #Il vérifie si l'IA a trouvé des objets segmentés dans la frame (si le modèle renvoie des masques et qu'ils ne sont pas vides).
-      for mask in result.masks.xy:                  # contient la liste de tous les objets segmentés. Chaque mask représente les coordonnées $(x, y)$ du contour de l'objet détecté.
+    if result.masks is not None:
+      for mask in result.masks.xy:
         points = np.array(mask, dtype=np.float32)
-        rect = cv2.minAreaRect(points)
-        (center_x, center_y), (dim1, dim2), angle = rect
-        longeur_pixel = max(dim1, dim2)
 
-        
-        # et on l'ajoute à notre historique brut
-        liste_mesures_vis.append(longeur_pixel)
-        if len(liste_mesures_vis) > MAX_HISTORIQUE:
-          liste_mesures_vis.pop(0)
+        # 1. Création d'un masque binaire pour isoler la vis actuelle
+        mask_img = np.zeros(frame.shape[:2], dtype=np.uint8)
+        cv2.fillPoly(mask_img, [np.int32(points)], 255)
 
-        box = cv2.boxPoints(rect)
-        box = np.int32(box)
-        cv2.drawContours(annotated_frame, [box], 0, (255, 0, 0), 2)
-        cv2.putText(
-            annotated_frame,
-            f"{longeur_pixel:.1f} px",
-            (int(center_x), int(center_y)),
-            cv2.FONT_HERSHEY_SIMPLEX,
-            0.6,
-            (0, 0, 0),
-            2,
-        )
+        # 2. Calcul des moments d'inertie pour trouver le centre et l'orientation
+        moments = cv2.moments(mask_img)
+
+        if moments["m00"] > 0:
+          # Centre de gravité (centroid)
+          cx = moments["m10"] / moments["m00"]
+          cy = moments["m01"] / moments["m00"]
+
+          # Moments centrés pour l'axe principal d'inertie
+          mu20 = moments["mu20"] / moments["m00"]
+          mu02 = moments["mu02"] / moments["m00"]
+          mu11 = moments["mu11"] / moments["m00"]
+
+          # Angle principal en radians
+          angle_rad = 0.5 * np.arctan2(2 * mu11, mu20 - mu02)
+          cos_a = np.cos(angle_rad)
+          sin_a = np.sin(angle_rad)
+
+          # 3. Récupération des pixels du masque et projection vectorielle (sans rotation d'image)
+          y_indices, x_indices = np.where(mask_img > 0)
+
+          if len(x_indices) > 10:
+            dx = x_indices - cx
+            dy = y_indices - cy
+
+            # u = axe longitudinal (longueur), v = axe transverse (largeur)
+            u = dx * cos_a + dy * sin_a
+            v = -dx * sin_a + dy * cos_a
+
+            # 4. Extraction du profil de largeur par tranches le long de u (pas de 1 pixel)
+            u_min, u_max = np.min(u), np.max(u)
+            bins = np.arange(u_min, u_max, 1.0)
+
+            widths = []
+            for i in range(len(bins) - 1):
+              mask_bin = (u >= bins[i]) & (u < bins[i + 1])
+              if np.any(mask_bin):
+                v_in_bin = v[mask_bin]
+                slice_width = np.max(v_in_bin) - np.min(v_in_bin)
+                widths.append(slice_width)
+
+            if len(widths) > 10:
+              widths = np.array(widths)
+
+              # 5. Lissage du profil pour éliminer l'effet des filets de vis
+              kernel_size = max(3, len(widths) // 20)
+              if kernel_size % 2 == 0:
+                kernel_size += 1
+              smoothed_widths = np.convolve(
+                  widths, np.ones(kernel_size) / kernel_size, mode="same"
+              )
+
+              # 6. Séparation Tête / Tige : on ignore les 40% du haut (tête) et on prend la médiane des 60% restants (tige)
+              shank_section = smoothed_widths[
+                  int(len(smoothed_widths) * 0.4) :
+              ]
+              shank_diameter_px = (
+                  np.median(shank_section) if len(shank_section) > 0 else 0
+              )
+              total_length_px = u_max - u_min
+
+              # 7. Conversion en millimètres si la calibration est prête
+              if calibration is not None and calibration > 0:
+                shank_diam_mm = (shank_diameter_px * piece_diametre) / calibration
+                total_len_mm = (total_length_px * piece_diametre) / calibration
+              else:
+                shank_diam_mm = 0
+                total_len_mm = 0
+
+              # Affichage visuel sur la frame
+              cv2.circle(annotated_frame, (int(cx), int(cy)), 5, (0, 0, 255), -1)
+              cv2.putText(
+                  annotated_frame,
+                  f"Tige: {shank_diam_mm:.2f}mm",
+                  (int(cx) - 40, int(cy) - 20),
+                  cv2.FONT_HERSHEY_SIMPLEX,
+                  0.5,
+                  (0, 255, 0),
+                  2,
+              )
+              cv2.putText(
+                  annotated_frame,
+                  f"Len: {total_len_mm:.1f}mm",
+                  (int(cx) - 40, int(cy)),
+                  cv2.FONT_HERSHEY_SIMPLEX,
+                  0.5,
+                  (0, 255, 0),
+                  2,
+              )
+
     if result.boxes is not None:
-        for box in result.boxes:
-            # 1. Récupérer l'indice de la classe (ex: 0, 1...)
-            cls_id = int(box.cls[0])
-            
-            # 2. Retrouver le nom textuel correspondant dans le dictionnaire du modèle
-            class_name = result.names[cls_id]
-            
-            
+      for box in result.boxes:
+        cls_id = int(box.cls[0])
+        class_name = result.names[cls_id]
 
-  # Calibrage de la pièce
+  # Calibrage de la pièce (ex: pièce de monnaie)
   cercles = cv2.HoughCircles(
       gray_blur,
       cv2.HOUGH_GRADIENT,
@@ -86,7 +150,7 @@ while cap.isOpened():
   )
   if cercles is not None:
     cercles = np.uint16(np.around(cercles))
-    i = cercles[0, 0]     #Extrait le premier cercle de cette liste. pour qu on ai plus qu une liste avec [x,y,r]
+    i = cercles[0, 0]
     if calibration is None:
       diametre_piece_mes.append(i[2] * 2)
       if len(diametre_piece_mes) >= 30:
@@ -94,36 +158,16 @@ while cap.isOpened():
         print(f"Calibration fixée : {calibration:.2f} pixels")
     cv2.circle(annotated_frame, (i[0], i[1]), i[2], (0, 255, 0), 2)
 
-  # --- VOTRE LOGIQUE DE VALIDATION ET DE SÉLECTION MAX ---
-  longeur_vis_validee = None
-
-  if len(liste_mesures_vis) >= 10:
-    valeurs_stables = []
-    SEUIL_COMPTEUR = (
-        5  # La valeur doit apparaître au moins 5 fois dans l'historique
-    )
-
-    for val in liste_mesures_vis:
-      # Compter combien de mesures sont dans l'intervalle [val - 5, val + 5]
-      compte = sum(1 for v in liste_mesures_vis if abs(v - val) <= 5)
-
-      if compte >= SEUIL_COMPTEUR:
-        valeurs_stables.append(val)
-
-    # Si on a trouvé des valeurs stables (ex: 108 et 155), on garde la plus haute
-    if valeurs_stables:
-      longeur_vis_validee = max(valeurs_stables)
-
-  # Calcul final et affichage
-  if calibration is not None and longeur_vis_validee is not None:
-    vis_mm = (longeur_vis_validee * piece_diametre) / calibration
-
-    if temps_actuel - dernier_affichage >= 1.0:
-      dernier_affichage = temps_actuel
-      print(f"Taille vis validée & max (px): {longeur_vis_validee:.1f}")
-      print(f"Longueur vis (mm): {vis_mm:.2f} mm")
-      # 3. Afficher le type de vis dans le terminal
-      print(f"Type détectée : {class_name}")
+  # Affichage périodique dans le terminal (toutes les secondes)
+  if calibration is not None and temps_actuel - dernier_affichage >= 1.0:
+    dernier_affichage = temps_actuel
+    try:
+      print(
+          f"Diametre (mm): {shank_diam_mm:.2f} | Longueur (mm): {total_len_mm:.2f} |"
+          f" Type: {class_name}"
+      )
+    except NameError:
+      pass
 
   cv2.imshow("Detection de vis en direct - YOLOv8", annotated_frame)
   if cv2.waitKey(1) & 0xFF == ord("q"):

@@ -35,8 +35,13 @@ while cap.isOpened():
   )  # Prédiction YOLO (détection et segmentation)
 
   for result in results:
-    if result.masks is not None:
-      for mask in result.masks.xy:
+    if result.masks is not None and result.boxes is not None:
+      for i, mask in enumerate(result.masks.xy):
+        box = result.boxes[i]
+        cls_id = int(box.cls[0])
+        class_name = result.names[cls_id]  # Récupération propre du type de la vis
+
+        
         points = np.array(mask, dtype=np.float32)
 
         # 1. Création d'un masque binaire pour isoler la vis actuelle
@@ -44,10 +49,6 @@ while cap.isOpened():
         cv2.fillPoly(mask_img, [np.int32(points)], 255)
 
 
-      if result.boxes is not None:
-        for box in result.boxes:
-          cls_id = int(box.cls[0])
-          class_name = result.names[cls_id]
 
         # 2. Calcul des moments d'inertie pour trouver le centre et l'orientation
         moments = cv2.moments(mask_img)

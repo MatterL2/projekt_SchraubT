@@ -217,6 +217,7 @@ while cap.isOpened():
       param1=100,
       param2=30,
       minRadius=20,
+      maxRadius=130,
   )
   if cercles is not None:
     cercles = np.uint16(np.around(cercles))

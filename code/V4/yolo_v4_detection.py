@@ -35,12 +35,17 @@ while cap.isOpened():
       frame, stream=True, verbose=False
   )  # Prédiction YOLO (détection et segmentation)
 
+  infos_classes_frame = []
+
   for result in results:
     if result.masks is not None and result.boxes is not None:
       for i, mask in enumerate(result.masks.xy):
         box = result.boxes[i]
         cls_id = int(box.cls[0])
         class_name = result.names[cls_id]  # Récupération propre du type de la vis
+        # Récupération de la confiance (score entre 0.0 et 1.0)
+        confidence = float(box.conf[0])
+        infos_classes_frame.append(f"{class_name}: {confidence:.2f}")
 
         
         points = np.array(mask, dtype=np.float32)
@@ -158,7 +163,7 @@ while cap.isOpened():
 
               shank_section_raw = widths[fin_tete_idx:]
               shank_diameter_px = (
-                  np.percentile(shank_section_raw, 98.5)
+                  np.percentile(shank_section_raw, 97)
                   if len(shank_section_raw) > 0
                   else 0
               )
@@ -233,12 +238,15 @@ while cap.isOpened():
   if calibration is not None and temps_actuel - dernier_affichage >= 1.0:
     dernier_affichage = temps_actuel
     try:
-      print(
-          f"Diametre (mm): {shank_diam_mm:.2f} | Longueur total(mm): {total_len_mm:.2f} | ", end=""
-            )
-      if class_name =="standard_screw":
-        print ( f"Longueur sous tete(mm): {shank_len_mm:.2f} | ", end="")
-      print(f"Type: {class_name}")
+      if confidence >=0.6:
+        print(
+            f"Diametre (mm): {shank_diam_mm:.2f} | Longueur total(mm): {total_len_mm:.2f} | ", end=""
+              )
+        if class_name =="standard_screw":
+          print ( f"Longueur sous tete(mm): {shank_len_mm:.2f} | ", end="")
+        print(f"Détéctions [Classe: Confiance] -> {infos_classes_frame}")
+      else :
+        print("not sure")
 
     except NameError:
       pass

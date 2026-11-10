@@ -156,10 +156,10 @@ while cap.isOpened():
                 shank_length_px = total_length_px
 
 
-              shank_section_final = smoothed_widths[fin_tete_idx:]
+              shank_section_raw = widths[fin_tete_idx:]
               shank_diameter_px = (
-                  np.median(shank_section_final)
-                  if len(shank_section_final) > 0
+                  np.percentile(shank_section_raw, 98.5)
+                  if len(shank_section_raw) > 0
                   else 0
               )
 

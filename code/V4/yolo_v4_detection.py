@@ -6,7 +6,7 @@ from ultralytics import YOLO
 dernier_affichage = time.time()
 
 piece_diametre = 24.25 #50 centimes # 2 euros 25.75
-pixelTomm = piece_diametre/326
+pixelTomm = piece_diametre/108 #on trouve diametre de 105 pixels pour la piece de 50 centimes 
 calibration = None
 diametre_piece_mes = []
 
@@ -166,9 +166,9 @@ while cap.isOpened():
 
                 # 7. Conversion en millimètres si la calibration est active
               if calibration is not None and calibration > 0:
-                shank_diam_mm = (shank_diameter_px * piece_diametre) / calibration
-                total_len_mm = (total_length_px * piece_diametre) / calibration
-                shank_len_mm = (shank_length_px * piece_diametre) / calibration
+                shank_diam_mm = shank_diameter_px * pixelTomm
+                total_len_mm = total_length_px * pixelTomm
+                shank_len_mm = shank_length_px * pixelTomm
               else:
                 shank_diam_mm = 0
                 total_len_mm = 0

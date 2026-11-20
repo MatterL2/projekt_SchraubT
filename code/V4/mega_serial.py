@@ -3,7 +3,7 @@ import serial
 
 
 class MegaSerialClient:
-  def __init__(self, port="/dev/ttyACM0", baudrate=115200, timeout=1.0):
+  def __init__(self, port="COM3", baudrate=115200, timeout=1.0): #/dev/ttyACM0 sur linux 
     self.port = port
     self.baudrate = baudrate
     self.timeout = timeout

@@ -36,6 +36,7 @@ class MegaSerialClient:
         maintenant - self.dernier_envoi >= min_interval
     ):
       self.send_line(commande)
+      print("message qu on envoie sur l arduino :" + self.send_line(commande))
       self.derniere_commande = commande
       self.dernier_envoi = maintenant
 
